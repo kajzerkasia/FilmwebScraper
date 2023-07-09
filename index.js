@@ -37,7 +37,26 @@ const scrapeFilmweb = async () => {
 
     }
 
-    // console.log(movies);
+    await browser.close();
+    return movies;
 };
 
-scrapeFilmweb();
+const deduplicateMovies = movies => {
+    const deduplicatedMovies = {};
+
+    movies.forEach(movie => {
+        const { title, rating, vodService } = movie;
+        const lowercaseTitle = title.toLowerCase();
+
+        if (deduplicatedMovies[lowercaseTitle]) {
+            if (rating > deduplicatedMovies[lowercaseTitle].rating) {
+                deduplicatedMovies[lowercaseTitle].rating = rating;
+                deduplicatedMovies[lowercaseTitle].vodService = vodService;
+            }
+        } else {
+            deduplicatedMovies[lowercaseTitle] = { title, rating, vodService };
+        }
+    });
+
+    return Object.values(deduplicatedMovies);
+};
