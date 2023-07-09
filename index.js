@@ -79,33 +79,28 @@ const scrapeAndSaveData = () => {
             return deduplicateMoviesAsync(movies);
         })
         .then(deduplicatedMovies => {
-            console.log(`Number of movies after deduplication: ${deduplicatedMovies.length}`);
+            // console.log(`Number of movies after deduplication: ${deduplicatedMovies.length}`);
 
             const sortedMovies = sortMoviesByRating(deduplicatedMovies);
-            console.log(`Number of sorted videos: ${sortedMovies.length}`);
+            // console.log(`Number of sorted videos: ${sortedMovies.length}`);
 
             const topMovies = sortedMovies.slice(0, 40); // Limited to 40 videos
-            console.log(`Number of movies to save: ${topMovies.length}`);
-
-            const records = topMovies.map(movie => ({
-                title: movie.title,
-                vodService: movie.vodService,
-                rating: movie.rating
-            }));
+            // console.log(`Number of movies to save: ${topMovies.length}`);
 
             const csvWriter = createCsvWriter({
                 path: 'movies.csv',
                 header: [
-                    { id: 'title', title: 'Title' },
-                    { id: 'vodService', title: 'VOD service name' },
-                    { id: 'rating', title: 'Rating' }
+                    {id: 'title', title: 'Title'},
+                    {id: 'vodService', title: 'VOD service name'},
+                    {id: 'rating', title: 'Rating'}
                 ],
-                fieldDelimiter: ',',
+                fieldDelimiter: ';',
                 recordDelimiter: '\n',
                 encoding: 'utf8',
+                append: false,
+                alwaysQuote: true,
             });
-
-            return csvWriter.writeRecords(records);
+            return csvWriter.writeRecords(topMovies);
         })
         .then(() => {
             console.log('The data was saved to the movies.csv file.');
