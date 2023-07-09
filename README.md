@@ -1,7 +1,6 @@
 # FilmwebScraper
 
-### A simple web scraper that download titles and ratings of movies from filmweb.pl
-
+### A simple web scraper that download titles and ratings of top rated movies from filmweb.pl
 
 ### With this app you can scrape movies from:
 
