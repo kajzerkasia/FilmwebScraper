@@ -60,3 +60,5 @@ const deduplicateMovies = movies => {
 
     return Object.values(deduplicatedMovies);
 };
+
+const sortMoviesByRating = movies => movies.sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating));
