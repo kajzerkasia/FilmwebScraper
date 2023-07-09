@@ -1,4 +1,5 @@
 const puppeteer = require('puppeteer');
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 
 const scrapeFilmweb = async () => {
     try {
@@ -85,6 +86,29 @@ const scrapeAndSaveData = () => {
 
             const topMovies = sortedMovies.slice(0, 40); // Limited to 40 videos
             console.log(`Number of movies to save: ${topMovies.length}`);
+
+            const records = topMovies.map(movie => ({
+                title: movie.title,
+                vodService: movie.vodService,
+                rating: movie.rating
+            }));
+
+            const csvWriter = createCsvWriter({
+                path: 'movies.csv',
+                header: [
+                    { id: 'title', title: 'Title' },
+                    { id: 'vodService', title: 'VOD service name' },
+                    { id: 'rating', title: 'Rating' }
+                ],
+                fieldDelimiter: ',',
+                recordDelimiter: '\n',
+                encoding: 'utf8',
+            });
+
+            return csvWriter.writeRecords(records);
+        })
+        .then(() => {
+            console.log('The data was saved to the movies.csv file.');
         })
         .catch(error => {
             console.error('Error:', error);
