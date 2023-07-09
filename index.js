@@ -1,113 +1,92 @@
 const puppeteer = require('puppeteer');
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 
-const scrapeFilmweb = async () => {
-    try {
-        const browser = await puppeteer.launch({ headless: 'new' });
-        const page = await browser.newPage();
+const scrapeFilmweb = async (browser, vodService) => {
+    const page = await browser.newPage();
+    const url = vodService.url;
 
-        const currentYear = new Date().getFullYear();
+    await page.goto(url);
+    await page.waitForSelector('.rankingType');
 
-        const vodServices = [
-            { name: 'Netflix', url: `https://www.filmweb.pl/ranking/vod/netflix/film/${currentYear}` },
-            { name: 'HBO Max', url: `https://www.filmweb.pl/ranking/vod/hbo_max/film/${currentYear}` },
-            { name: 'Canal+', url: `https://www.filmweb.pl/ranking/vod/canal_plus/film/${currentYear}` },
-            { name: 'Disney', url: `https://www.filmweb.pl/ranking/vod/disney/film/${currentYear}` }
-        ];
+    const moviesOnService = await page.$$eval('.rankingType', elements => {
+        return elements.slice(0, 10).map(element => {
+            const titleElement = element.querySelector('.rankingType__title a');
+            const title = titleElement ? titleElement.textContent.trim() : '';
 
-        const movies = [];
+            const ratingElement = element.querySelector('.rankingType__rate--value');
+            const rating = ratingElement ? ratingElement.textContent.trim().replace('.', ',') : '';
 
-        for (const vodService of vodServices) {
-            const url = vodService.url;
-            await page.goto(url);
-            await page.waitForSelector('.rankingType');
+            return {title, rating};
+        });
+    });
 
-            const moviesOnService = await page.$$eval('.rankingType', elements => {
-                return elements.map(element => {
-                    const titleElement = element.querySelector('.rankingType__title a');
-                    const title = titleElement ? titleElement.textContent.trim() : '';
-
-                    const ratingElement = element.querySelector('.rankingType__rate--value');
-                    const rating = ratingElement ? ratingElement.textContent.trim().replace(',', '.') : '';
-
-                    return { title, rating };
-                });
-            });
-
-            movies.push(...moviesOnService.slice(0, 10).map(movie => ({ ...movie, vodService: vodService.name })));
-        }
-
-        await browser.close();
-        return movies;
-    } catch (error) {
-        throw new Error(error);
-    }
+    await page.close();
+    return moviesOnService.map(movie => ({...movie, vodService: vodService.name}));
 };
 
 const deduplicateMoviesAsync = async movies => {
-    return new Promise((resolve, reject) => {
-        try {
-            const deduplicatedMovies = {};
+    const deduplicatedMovies = {};
 
-            movies.forEach(movie => {
-                const { title, rating, vodService } = movie;
-                const lowercaseTitle = title.toLowerCase();
+    movies.forEach(movie => {
+        const {title, rating, vodService} = movie;
+        const lowercaseTitle = title.toLowerCase();
 
-                if (deduplicatedMovies[lowercaseTitle]) {
-                    if (rating > deduplicatedMovies[lowercaseTitle].rating) {
-                        deduplicatedMovies[lowercaseTitle].rating = rating;
-                        deduplicatedMovies[lowercaseTitle].vodService = vodService;
-                    }
-                } else {
-                    deduplicatedMovies[lowercaseTitle] = { title, rating, vodService };
-                }
-            });
-
-            resolve(Object.values(deduplicatedMovies));
-        } catch (error) {
-            reject(error);
+        if (deduplicatedMovies[lowercaseTitle]) {
+            if (rating > deduplicatedMovies[lowercaseTitle].rating) {
+                deduplicatedMovies[lowercaseTitle].rating = rating;
+                deduplicatedMovies[lowercaseTitle].vodService = vodService;
+            }
+        } else {
+            deduplicatedMovies[lowercaseTitle] = {title, rating, vodService};
         }
     });
+
+    return Object.values(deduplicatedMovies);
 };
 
 const sortMoviesByRating = movies => movies.sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating));
 
-const scrapeAndSaveData = () => {
-    scrapeFilmweb()
-        .then(movies => {
-            console.log(`Number of downloaded videos: ${movies.length}`);
-            return deduplicateMoviesAsync(movies);
-        })
-        .then(deduplicatedMovies => {
-            // console.log(`Number of movies after deduplication: ${deduplicatedMovies.length}`);
+const scrapeAndSaveData = async () => {
+    const browser = await puppeteer.launch({headless: 'new'});
+    const currentYear = new Date().getFullYear();
 
-            const sortedMovies = sortMoviesByRating(deduplicatedMovies);
-            // console.log(`Number of sorted videos: ${sortedMovies.length}`);
+    const vodServices = [
+        {name: 'Netflix', url: `https://www.filmweb.pl/ranking/vod/netflix/film/${currentYear}`},
+        {name: 'HBO Max', url: `https://www.filmweb.pl/ranking/vod/hbo_max/film/${currentYear}`},
+        {name: 'Canal+', url: `https://www.filmweb.pl/ranking/vod/canal_plus/film/${currentYear}`},
+        {name: 'Disney', url: `https://www.filmweb.pl/ranking/vod/disney/film/${currentYear}`}
+    ];
 
-            const topMovies = sortedMovies.slice(0, 40); // Limited to 40 videos
-            // console.log(`Number of movies to save: ${topMovies.length}`);
+    const scrapePromises = vodServices.map(vodService => scrapeFilmweb(browser, vodService));
+    const moviesByService = await Promise.all(scrapePromises);
+    const movies = moviesByService.flat();
 
-            const csvWriter = createCsvWriter({
-                path: 'movies.csv',
-                header: [
-                    {id: 'title', title: 'Title'},
-                    {id: 'vodService', title: 'VOD service name'},
-                    {id: 'rating', title: 'Rating'}
-                ],
-                fieldDelimiter: ';',
-                recordDelimiter: '\n',
-                encoding: 'utf8',
-                append: false,
-                alwaysQuote: true,
-            });
-            return csvWriter.writeRecords(topMovies);
-        })
-        .then(() => {
-            console.log('The data was saved to the movies.csv file.');
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        });
+    await browser.close();
+
+    const deduplicatedMovies = await deduplicateMoviesAsync(movies);
+    const sortedMovies = sortMoviesByRating(deduplicatedMovies);
+    const topMovies = sortedMovies.slice(0, 40);
+
+    const csvWriter = createCsvWriter({
+        path: 'movies.csv',
+        header: [
+            {id: 'title', title: 'Title'},
+            {id: 'vodService', title: 'VOD service name'},
+            {id: 'rating', title: 'Rating'}
+        ],
+        fieldDelimiter: ';',
+        recordDelimiter: '\n',
+        encoding: 'utf8',
+        append: false,
+        alwaysQuote: true,
+    });
+    await csvWriter.writeRecords(topMovies);
 };
 
-scrapeAndSaveData();
+scrapeAndSaveData()
+    .then(() => {
+        console.log('The data was saved to the movies.csv file.');
+    })
+    .catch((error) => {
+        console.error('An error occurred when trying to save data to the movies.csv file.', error);
+    });
