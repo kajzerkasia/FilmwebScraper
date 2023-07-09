@@ -70,3 +70,24 @@ const deduplicateMoviesAsync = async movies => {
 };
 
 const sortMoviesByRating = movies => movies.sort((a, b) => parseFloat(b.rating) - parseFloat(a.rating));
+
+async function scrapeAndSaveData() {
+    try {
+        const movies = await scrapeFilmweb();
+        console.log(`Number of downloaded videos: ${movies.length}`);
+
+        const deduplicatedMovies = await deduplicateMoviesAsync(movies);
+        console.log(`Number of movies after deduplication: ${deduplicatedMovies.length}`);
+
+        const sortedMovies = sortMoviesByRating(deduplicatedMovies);
+        console.log(`Number of sorted videos: ${sortedMovies.length}`);
+
+        const topMovies = sortedMovies.slice(0, 40); // Limited to 40 videos
+        console.log(`Number of movies to save: ${topMovies.length}`);
+
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+scrapeAndSaveData();
